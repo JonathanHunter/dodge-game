@@ -3,8 +3,10 @@ package vgdev.dodge.props
 	import flash.display.Bitmap;
 	import flash.display.BitmapData;
 	import flash.display.MovieClip;
+	import flash.geom.Point;
 	import vgdev.dodge.ContainerGame;
 	import vgdev.dodge.mechanics.TimeScale;
+	import vgdev.dodge.mechanics.HitTester;
 	
 	/**
 	 * Abstract class
@@ -34,16 +36,19 @@ package vgdev.dodge.props
 		
 		public var currentState:int = STATE_WAIT;
 		
-		/// The JSON/Object parameters that were passed into the constructor
-		private var params:Object;
-		
 		// helpers to use if obstacle is a bitmap instead of just a drawing shape
 		public var isBitmap:Boolean = false;
 		public var bitmapData:BitmapData;
 		
-		// TODO remove temporary code
+		// bitmap embedding
 		[Embed(source = "../../../../img/doge.png")]
 		public static var Bitmap_Doge:Class;
+		[Embed(source = "../../../../img/orange.png")]
+		public static var Bitmap_Orange:Class;
+		/*[Embed(source="../../../../img/peach.png")]
+		public static var Bitmap_Peach:Class;*/
+		[Embed(source = "../../../../img/apple.png")]
+		public static var Bitmap_Apple:Class;
 		
 		public function ABST_Obstacle(_cg:ContainerGame, _params:Object)
 		{
@@ -76,23 +81,27 @@ package vgdev.dodge.props
 			else
 			{
 				isBitmap = true;
-				//trace("Adding: " + (new Bitmap_Doge()));
-				//_params["image"].x -= _params["image"].width * .5;		// center the image
-				//_params["image"].y -= _params["image"].height * .5;
-				var img:Bitmap = new Bitmap_Doge();
+				var imgClass:Class;
+				switch (_params["image"])
+				{
+					case "doge":		imgClass = Bitmap_Doge;		break;
+					case "apple":		imgClass = Bitmap_Apple;	break;
+					case "orange":		imgClass = Bitmap_Orange;	break;
+					//case "peach":		imgClass = Bitmap_Peach;	break;
+					default:			trace("ERROR in ABST_Obstacle: Image " + _params["image"] + " not found!");
+				}
+				var img:Bitmap = new imgClass();
 				bitmapData = img.bitmapData;
-				img.x -= img.width * .5;
-				img.y -= img.height * .5;
+				//img.x -= img.width * .5;
+				//img.y -= img.height * .5;
 				mc_object.addChild(img);
-				img = new Bitmap_Doge();
-				img.x -= img.width * .5;
-				img.y -= img.height * .5;
+				img = new imgClass();
+				//img.x -= img.width * .5;
+				//img.y -= img.height * .5;
 				mc_object.tele.addChild(img);
 			}
 			
-			cg.addChild(mc_object);
-			
-			// TODO read and set params from _params object
+			// read and set params from _params object
 			spawnTime = setParam("spawn", spawnTime);
 			activeTime = setParam("active", activeTime);
 			mc_object.x = setParam("x", 0);
@@ -105,19 +114,8 @@ package vgdev.dodge.props
 			mc_object.scaleY = setParam("scaleY", mc_object.scaleY);
 			
 			mc_object.visible = false;
-		}
-		
-		/**
-		 * Helper used in the constructor to set parameters
-		 * @param	key			Key to use in _params
-		 * @param	fallback	Default value to use if value is null
-		 * @return				Value of the key if not null; otherwise fallback
-		 */
-		protected function setParam(key:String, fallback:*):*
-		{
-			if (params[key])
-				return params[key];
-			return fallback;
+			
+			//trace("Obstacle added at " + mc_object.x + ", " + mc_object.y);
 		}
 		
 		/**
@@ -164,6 +162,10 @@ package vgdev.dodge.props
 						currentState = STATE_DESPAWN;
 						currentTime = 0;
 					}
+					else
+					{
+						checkCollision();
+					}
 				break;
 				case STATE_DESPAWN:
 					mc_object.alpha = 1 - (currentTime / despawnTime);
@@ -171,11 +173,31 @@ package vgdev.dodge.props
 					{
 						currentState = STATE_DEAD;
 						completed = true;
+						mc_object.visible = false;
 					}
 				break;
 			}
 			
 			return completed;
+		}
+		
+		/**
+		 * Check for collision with the Player
+		 */
+		protected function checkCollision():void
+		{
+			var ptPlayer:Point = (new Point(cg.player.mc_object.x + 400, cg.player.mc_object.y + 300));
+			if (mc_object.hitTestObject(cg.player.mc_object))
+			{
+				// TODO fix me please
+				if ((!isBitmap && mc_object.hitTestPoint(ptPlayer.x, ptPlayer.y, true)) ||
+					 HitTester.realHitTest(mc_object, ptPlayer))
+				{
+					cg.player.kill();
+					trace("DEAD");
+				}
+				else trace("ok");
+			}
 		}
 		
 		/**

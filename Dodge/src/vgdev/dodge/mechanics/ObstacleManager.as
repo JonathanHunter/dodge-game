@@ -24,7 +24,26 @@ package vgdev.dodge.mechanics
 		
 		public function hasObstacles():Boolean
 		{
-			return obstacles.length == 0;
+			return obstacles.length > 0;
+		}
+		
+		/**
+		 * Kills all obstacles
+		 */
+		public function reset():void
+		{
+			if (obstacles.length == 0)
+				return;
+			var obstacle:ABST_Obstacle;
+			for (var i:int = obstacles.length - 1; i >= 0; i--)
+			{
+				obstacle = obstacles[i] as ABST_Obstacle;
+				if (cg.game.container_telegraphs.contains(obstacle.mc_object))
+					cg.game.container_telegraphs.removeChild(obstacle.mc_object);
+				obstacle.currentState = obstacle.STATE_DEAD;
+				obstacle = null;
+			}
+			obstacles = [];
 		}
 		
 		/**
@@ -59,19 +78,7 @@ package vgdev.dodge.mechanics
 						cg.game.container_telegraphs.removeChild(obstacle.mc_object);
 					obstacles.splice(i, 1);
 					obstacle = null;
-				}
-				// player hit detection
-				else if (cg.gameActive && obstacle.currentState == obstacle.STATE_ACTIVE)
-				{
-					var ptObst:Point = new Point(obstacle.mc_object.x, obstacle.mc_object.y);
-					if (obstacle.mc_object.hitTestObject(cg.player.mc_object))
-					{
-						if ((!obstacle.isBitmap && obstacle.mc_object.hitTestPoint(ptPlayer.x, ptPlayer.y, true)) ||
-							 HitTester.realHitTest(obstacle.mc_object, ptPlayer))
-						{
-							cg.player.kill();
-						}
-					}
+					trace("[OM] Removed an obstacle");
 				}
 			}
 			// end update active obstacles

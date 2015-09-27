@@ -4,6 +4,8 @@
 	import flash.events.KeyboardEvent;
 	import flash.ui.Keyboard;
 	import flash.media.Sound;
+	import flash.media.SoundMixer;
+	import vgdev.dodge.mechanics.ObstacleLoader;
 	import vgdev.dodge.mechanics.ObstacleManager;
 	import vgdev.dodge.mechanics.ObstacleTimeline;
 	import vgdev.dodge.props.ABST_Obstacle;
@@ -25,11 +27,13 @@
 		
 		public var obstacleTimeline:ObstacleTimeline;
 		public var obstacleManager:ObstacleManager;
+		public var obstacleLoader:ObstacleLoader;
 		
 		public var gameActive:Boolean = true;		// TODO change later
 		public var gamePaused:Boolean = false;
 		
 		private var overCounter:int = 0;
+		private var json:Object;					// level data
 		
 		// TODO move to SoundManager class
 		[Embed(source = "../../../bgm/BGM_WildstarVanguard.mp3")]
@@ -38,11 +42,13 @@
 		/**
 		 * A MovieClip containing all of a Dodge level
 		 * @param	eng			A reference to the Engine
+		 * @param	_json		Level data JSON object
 		 */
-		public function ContainerGame(eng:Engine)
+		public function ContainerGame(eng:Engine, _json:Object)
 		{
 			super();
 			engine = eng;
+			json = _json;
 			
 			// set up the game MovieClip
 			game = new SWC_Game();
@@ -65,23 +71,27 @@
 			game.container_player.addChild(player.mc_object);
 			
 			// TODO change later
-			var bgm:Sound = new bgm_main();
-			bgm.play();
+			SoundMixer.stopAll();
+			//var bgm:Sound = new bgm_main();
+			//bgm.play();
 			
 			// TODO make better later
 			obstacleTimeline = new ObstacleTimeline();
 			
+			obstacleLoader = new ObstacleLoader(this);
+			obstacleLoader.loadLevel(json);
+			
 			var ONE:int = 60;
 			var TWO:int = 180;
 			var THREE:int = 270;
-			var FOUR:int = 500;
-			var FIVE:int = 700;
+			var FOUR:int = 60;// 500;
+			var FIVE:int = 260;// 700;
 			
 			// TODO JSON
 			// demo level 1
 			if (false)
 			{
-			obstacleTimeline.addObstacle(new ABST_Obstacle(this, {"x":100, "y":100}), ONE);
+			/*obstacleTimeline.addObstacle(new ABST_Obstacle(this, {"x":100, "y":100}), ONE);
 			obstacleTimeline.addObstacle(new ABST_Obstacle(this, {"x":-100, "y":100}), ONE + 30);
 			obstacleTimeline.addObstacle(new ABST_Obstacle(this, { "x":100, "y": -100} ), ONE + 60);
 			
@@ -97,7 +107,7 @@
 			obstacleTimeline.addObstacle(new ABST_Obstacle(this, {"x":-200, "y":-200, "scale":5, "circle":true, "spawn":60}), THREE + 180);
 			obstacleTimeline.addObstacle(new ABST_Obstacle(this, {"x":200, "y":200, "scale":5, "circle":true, "spawn":60}), THREE + 180);
 			obstacleTimeline.addObstacle(new ABST_Obstacle(this, {"x":200, "y":-200, "scale":5, "circle":true, "spawn":60}), THREE + 180);
-			obstacleTimeline.addObstacle(new ABST_Obstacle(this, {"x": -200, "y":200, "scale":5, "circle":true, "spawn":60 } ), THREE + 180);
+			obstacleTimeline.addObstacle(new ABST_Obstacle(this, {"x": -200, "y":200, "scale":5, "circle":true, "spawn":60 } ), THREE + 180);*/
 			
 			obstacleTimeline.addObstacle(new ABST_Obstacle(this, {"x":600, "y":-100, "dx":-5, "scale":3, "active":200}), FOUR);
 			obstacleTimeline.addObstacle(new ABST_Obstacle(this, {"x":-600, "y":100, "dx":5, "scale":3, "active":200}), FOUR);
@@ -128,7 +138,7 @@
 			}
 			
 			// demo level 2
-			if (true)
+			if (false)
 			{
 			obstacleTimeline.addObstacle(new ABST_Obstacle(this, {"x":200, "y":-150, "scaleX":4, "scaleY":3}), ONE);
 			obstacleTimeline.addObstacle(new ABST_Obstacle(this, {"x":200, "y":150, "scaleX":4, "scaleY":3}), ONE);
@@ -180,9 +190,24 @@
 			}
 			
 			obstacleManager = new ObstacleManager(this, obstacleTimeline);
-			eng.stage.addEventListener(KeyboardEvent.KEY_DOWN, downKeyboard);
+			engine.stage.addEventListener(KeyboardEvent.KEY_DOWN, downKeyboard);
+			engine.stage.focus = engine.stage;
 		}
 		
+		/**
+		 * Helper to be called from ObstacleLoader
+		 * @param	obst		the obstacle to add to the timeline
+		 * @param	time		the frame to add the obstacle on
+		 */
+		public function addObstacle(obst:ABST_Obstacle, time:int):void
+		{
+			obstacleTimeline.addObstacle(obst, time);
+		}
+		
+		/**
+		 * Callback when a key is pressed; i.e. a key goes from NOT PRESSED to PRESSED
+		 * @param	e		the associated KeyboardEvent; use e.keyCode
+		 */
 		private function downKeyboard(e:KeyboardEvent):void
 		{			
 			switch (e.keyCode)
@@ -197,16 +222,30 @@
 						game.mc_paused.gotoAndPlay("in");
 						gamePaused = true;
 					}
-				break;
+					break;
+				case Keyboard.R:
+					// reset level
+					if (!obstacleTimeline.gameComplete())
+						onRestart(new MouseEvent(MouseEvent.CLICK));
+					break;
 			}
 		}
 		
+		/**
+		 * Plays the 'out' animation for the pause screen and readies the unpause helper
+		 * @param	e		not used
+		 */
 		private function unpauseHelper(e:MouseEvent):void
 		{
 			game.mc_paused.gotoAndPlay("out");
 			game.mc_paused.addEventListener(Event.ENTER_FRAME, unpause);
 		}
 		
+		/**
+		 * Callback used between the 'out' animation for the pause screen, and when it finishes animating
+		 * Unpauses the game and removes the callback
+		 * @param	e		not used
+		 */
 		private function unpause(e:Event):void
 		{
 			if (game.mc_paused.currentFrame == 1)
@@ -222,24 +261,29 @@
 		 */
 		override public function step():Boolean
 		{
-			// game over
+			if (gamePaused)
+				return completed;
+			// -- do the following only if the game is not paused
+			
+			// check if game over and needs to start the "Game Over" animation (once)
 			if (!player.alive && overCounter < 45 && ++overCounter == 45)
 			{
+				trace("[CG] Starting Game Over");
 				game.mc_over.gotoAndPlay(1);
 				return completed;
 			}
 			
-			// stage clear
+			//  check if stage cleared and needs to start the "Stage Clear" animation (once)
 			if (obstacleTimeline.gameComplete() && !obstacleManager.hasObstacles() && game.mc_over.currentFrame == 1)
 			{
+				trace(obstacleManager.hasObstacles());
+				trace("[CG] Starting Stage Clear");
 				game.mc_over.gotoAndPlay(1);
 				game.mc_over.menuOver.gotext.gotoAndStop(2);
 				return completed;
 			}
-			
-			if (gamePaused)
-				return completed;
-			
+
+			// helper to continue stepping the obstacles but not the player if the player dies
 			if (gameActive)
 			{
 				player.step();
@@ -252,12 +296,24 @@
 			return completed;			// return the state of the container (if true, it is done)
 		}
 		
+		/**
+		 * Callback for the "Restart" button in the pause menu
+		 * Immediately restart the level
+		 * Pass in null to this function to call it from places other than a callback
+		 * @param	e		not used
+		 */
 		protected function onRestart(e:MouseEvent):void
 		{
 			engine.returnCode = engine.RET_RESTART;
 			completed = true;
 		}
 		
+		/**
+		 * Callback for the "Quit" button in the pause menu
+		 * Immediately quit the level and go to the next game state, defined in Engine
+		 * Pass in null to this function to call it from places other than a callback
+		 * @param	e		not used
+		 */
 		protected function onQuit(e:MouseEvent):void
 		{
 			completed = true;
@@ -269,6 +325,9 @@
 		 */
 		protected function destroy(e:Event):void
 		{			
+			if (engine.stage.hasEventListener(KeyboardEvent.KEY_DOWN))
+				engine.stage.removeEventListener(KeyboardEvent.KEY_DOWN, downKeyboard);
+			
 			if (game && contains(game))
 				removeChild(game);
 			game = null;
