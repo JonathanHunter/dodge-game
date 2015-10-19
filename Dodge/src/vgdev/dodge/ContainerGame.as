@@ -2,13 +2,14 @@
 {
 	import flash.events.Event;
 	import flash.events.KeyboardEvent;
+	import flash.geom.Point;
 	import flash.ui.Keyboard;
 	import flash.media.Sound;
 	import flash.media.SoundMixer;
 	import vgdev.dodge.mechanics.ObstacleLoader;
 	import vgdev.dodge.mechanics.ObstacleManager;
 	import vgdev.dodge.mechanics.ObstacleTimeline;
-	import vgdev.dodge.props.ABST_Obstacle;
+	import vgdev.dodge.props.ABST_Prop;
 	import vgdev.dodge.props.Player;
 	import vgdev.dodge.mechanics.TimeScale;
 	import flash.events.MouseEvent;
@@ -22,6 +23,7 @@
 	{		
 		public var engine:Engine;		// the game's Engine
 		public var game:SWC_Game;		// the Game SWC, containing all the base assets
+		private var anchor:Point;		// the starting coordinates of the game SWC
 		
 		public var player:Player;
 		
@@ -34,10 +36,6 @@
 		
 		private var overCounter:int = 0;
 		private var json:Object;					// level data
-		
-		// TODO move to SoundManager class
-		[Embed(source = "../../../bgm/BGM_WildstarVanguard.mp3")]
-		private var bgm_main:Class;
 
 		/**
 		 * A MovieClip containing all of a Dodge level
@@ -53,6 +51,7 @@
 			// set up the game MovieClip
 			game = new SWC_Game();
 			addChild(game);
+			anchor = new Point(game.x, game.y);
 			
 			game.mc_paused.visible = false;
 			game.mc_paused.menuPaused.btn_resume.addEventListener(MouseEvent.CLICK, unpauseHelper);
@@ -70,10 +69,7 @@
 			player = new Player(this);
 			game.container_player.addChild(player.mc_object);
 			
-			// TODO change later
-			SoundMixer.stopAll();
-			//var bgm:Sound = new bgm_main();
-			//bgm.play();
+			SoundManager.playBGM("bgm_main");
 			
 			// TODO make better later
 			obstacleTimeline = new ObstacleTimeline();
@@ -192,16 +188,22 @@
 			obstacleManager = new ObstacleManager(this, obstacleTimeline);
 			engine.stage.addEventListener(KeyboardEvent.KEY_DOWN, downKeyboard);
 			engine.stage.focus = engine.stage;
+			
+			// tutorial
+			if (eng.currLevel == "lvl_tutorial_01")
+				game.mc_tutorial.gotoAndPlay("move");
+			else if (eng.currLevel == "lvl_tutorial_02")
+				game.mc_tutorial.gotoAndPlay("slow");
 		}
 		
 		/**
 		 * Helper to be called from ObstacleLoader
-		 * @param	obst		the obstacle to add to the timeline
-		 * @param	time		the frame to add the obstacle on
+		 * @param	obst		the obstacle/pickup to add to the timeline
+		 * @param	time		the frame to add the obstacle/pickup on
 		 */
-		public function addObstacle(obst:ABST_Obstacle, time:int):void
+		public function addProp(prop:ABST_Prop, time:int):void
 		{
-			obstacleTimeline.addObstacle(obst, time);
+			obstacleTimeline.addProp(prop, time);
 		}
 		
 		/**
@@ -225,7 +227,7 @@
 					break;
 				case Keyboard.R:
 					// reset level
-					if (!obstacleTimeline.gameComplete())
+					//if (!obstacleTimeline.gameComplete())
 						onRestart(new MouseEvent(MouseEvent.CLICK));
 					break;
 			}
@@ -268,7 +270,7 @@
 			// check if game over and needs to start the "Game Over" animation (once)
 			if (!player.alive && overCounter < 45 && ++overCounter == 45)
 			{
-				trace("[CG] Starting Game Over");
+				//trace("[CG] Starting Game Over");
 				game.mc_over.gotoAndPlay(1);
 				return completed;
 			}
@@ -277,7 +279,7 @@
 			if (obstacleTimeline.gameComplete() && !obstacleManager.hasObstacles() && game.mc_over.currentFrame == 1)
 			{
 				trace(obstacleManager.hasObstacles());
-				trace("[CG] Starting Stage Clear");
+				//trace("[CG] Starting Stage Clear");
 				game.mc_over.gotoAndPlay(1);
 				game.mc_over.menuOver.gotext.gotoAndStop(2);
 				return completed;
@@ -290,10 +292,22 @@
 			}
 			obstacleManager.step();
 			
-			// TODO make better, shrink the game if time is slowed
-			game.scaleX = game.scaleY = .95 + TimeScale.s_scale * .05;
+			// zoom and pan the game on the player if time is slowed
+			game.scaleX = game.scaleY = 1 + (1 - TimeScale.s_scale) * .2;
+			game.x = anchor.x - (1 - TimeScale.s_scale) * player.mc_object.x * .4;
+			game.y = anchor.y - (1 - TimeScale.s_scale) * player.mc_object.y * .4;
 			
 			return completed;			// return the state of the container (if true, it is done)
+		}
+		
+		/**
+		 * Ends the current stage immediately
+		 */
+		public function endStage():void
+		{
+			// rather clunky, TODO fix later
+			obstacleManager.reset();
+			obstacleTimeline.frameNow = obstacleTimeline.highestFrame;
 		}
 		
 		/**
